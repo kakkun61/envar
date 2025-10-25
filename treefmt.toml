@@ -1,0 +1,14 @@
+tree-root = "."
+
+[formatter.gofmt]
+command = "gofmt"
+options = [ "-w" ]
+includes = [ "*.go" ]
+
+[formatter.nixfmt]
+command = "nixfmt"
+includes = [ "*.nix" ]
+
+[formatter.yamlfmt]
+command = "yamlfmt"
+includes = [ "*.yml", "*.yaml" ]
