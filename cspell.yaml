@@ -1,0 +1,15 @@
+words:
+  - adrg
+  - gofeed
+  - mmcdole
+  - nixfmt
+  - nixos
+  - nixpkgs
+  - pkgs
+  - treefmt
+ignorePaths:
+  - .*
+  - flake.lock
+  - go.mod
+  - go.sum
+  - treefmt.toml
