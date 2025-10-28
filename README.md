@@ -20,7 +20,7 @@ eval "$(gh-auth-switch hook)"
 
 ## Write the configuration file
 
-The configuration file uses a subset of the YAML format. It is located at _`$CONFIG_DIR`/gh-auth-switch/config.yaml_. `$CONFIG_DIR` is 
+The configuration file uses a subset of the YAML format. It is located at _`$CONFIG_DIR`/gh-auth-switch/config.yaml_. `$CONFIG_DIR` is a returned value of [`os.UserConfigDir()`](https://pkg.go.dev/os#UserConfigDir).
 
 The file format consists of lines containing two fields: a path prefix and a GitHub username separated by a colon. Comment lines start with `#` and empty lines are ignored. Path prefixes can be quoted with double quotes. `~` expands to the user's home directory. Lines are matched from top to bottom, with the first match taking precedence.
 
