@@ -6,7 +6,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"unicode/utf8"
@@ -48,8 +47,6 @@ func doMain() {
 			log.Fatal(fmt.Errorf("failed to match pattern %s. caused by %w", pathPrefix, err))
 		}
 		if matched {
-			cmd := exec.Command("gh", "auth", "switch", "-u", user)
-			cmd.Run()
 			fmt.Println(user)
 			return
 		}
