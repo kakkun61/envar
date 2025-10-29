@@ -198,3 +198,30 @@ FOO_VAR:
 		t.Fatalf("expected Value %v, but got: %v", "AAA:BBB", *fooVar[0].Value)
 	}
 }
+
+func TestUnmarshalConfigExec(t *testing.T) {
+	config, err := UnmarshalConfig([]byte(strings.TrimSpace(`
+FOO_VAR:
+  /tmp/example:
+    exec: "echo foo"
+	`)))
+	if err != nil {
+		t.Fatalf("expected no error, but got: %v", err)
+	}
+	fooVar, ok := (*config)["FOO_VAR"]
+	if !ok {
+		t.Fatalf("expected FOO_VAR to exist")
+	}
+	if len(fooVar) != 1 {
+		t.Fatalf("expected one entry, got %d", len(fooVar))
+	}
+	if fooVar[0].PathPrefix != "/tmp/example" {
+		t.Fatalf("unexpected PathPrefix: %s", fooVar[0].PathPrefix)
+	}
+	if fooVar[0].Value != nil {
+		t.Fatalf("Value should be nil when exec is set")
+	}
+	if *fooVar[0].Exec != "echo foo" {
+		t.Fatalf("unexpected Exec: %#v", fooVar[0].Exec)
+	}
+}

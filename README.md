@@ -56,3 +56,13 @@ FOO_VAR:
 ```
 
 When no matching path prefix is found for a variable, it is unset.
+
+You can use programs to get values, if you don't want to write some secret values directly in the configuration file for example. Here is an instance using `gh` CLI to get GitHub authentication token:
+
+```yaml
+GH_TOKEN:
+  path/to/dir:
+    exec: gh auth token --user foo
+  other/path:
+    exec: gh auth token --user bar
+```

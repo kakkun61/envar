@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -72,7 +73,13 @@ func doMain(shellPid uint) {
 			pathPrefix = strings.Replace(pathPrefix, "~", homeDir, 1)
 			matched := strings.HasPrefix(workingDirectory, pathPrefix)
 			if matched {
-				if pathValue.Value == nil {
+				if pathValue.Exec != nil {
+					v, err := runExecCommand(*pathValue.Exec)
+					if err != nil {
+						log.Fatal(fmt.Errorf("failed to run exec for %s, because %w", varName, err))
+					}
+					script = append(script, fmt.Sprintf("export %s=%s", varName, v))
+				} else if pathValue.Value == nil {
 					script = append(script, fmt.Sprintf("unset %s", varName))
 				} else {
 					script = append(script, fmt.Sprintf("export %s=%s", varName, *pathValue.Value))
@@ -96,6 +103,7 @@ func doMain(shellPid uint) {
 type PathValue struct {
 	PathPrefix string
 	Value      *string // nil means unset
+	Exec       *string // optional command to execute for value
 }
 
 type Config = map[string][]PathValue
@@ -130,60 +138,101 @@ func UnmarshalConfig(bytes []byte) (*Config, error) {
 	config := make(Config)
 	lines := strings.Split(str, "\n")
 	var currentVarName string
-	for _, line := range lines {
-		if line == "" {
-			continue
-		}
+	var currentPathIndent int = -1
+	var currentPathValue *PathValue
+	for i := range lines {
+		line := lines[i]
 		trimmedLine := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmedLine, "#") || trimmedLine == "" {
+		if trimmedLine == "" || strings.HasPrefix(trimmedLine, "#") {
 			continue
 		}
-		// Check if this is a variable name line (first level - no leading whitespace)
-		if len(line) > 0 && line[0] != ' ' && line[0] != '\t' {
-			// This is a variable name line
+		indent := countIndent(line)
+		if indent == 0 {
+			// 変数名の行が期待される
 			if !strings.HasSuffix(trimmedLine, ":") {
 				return nil, fmt.Errorf("variable name line must end with colon: %s", trimmedLine)
 			}
-			currentVarName = strings.TrimSpace(trimmedLine[:len(trimmedLine)-1])
-			if currentVarName == "" {
+			name := strings.TrimSpace(trimmedLine[:len(trimmedLine)-1])
+			if name == "" {
 				return nil, fmt.Errorf("variable name must not be empty: %s", trimmedLine)
 			}
-			if len(currentVarName) >= 2 && currentVarName[0] == '"' && currentVarName[len(currentVarName)-1] == '"' {
-				currentVarName = currentVarName[1 : len(currentVarName)-1]
-			}
+			name = trimQuotes(name)
+			currentVarName = name
 			if _, exists := config[currentVarName]; !exists {
 				config[currentVarName] = make([]PathValue, 0)
 			}
-		} else {
-			// This is a path-and-value line (second level - has leading whitespace)
-			if currentVarName == "" {
-				return nil, fmt.Errorf("path-and-value line must be under a variable name: %s", trimmedLine)
-			}
-			words := strings.SplitN(trimmedLine, ":", 2)
-			if len(words) != 2 {
-				return nil, fmt.Errorf("path and value must be separated by a colon: %s", trimmedLine)
-			}
-			pathPrefix := strings.TrimSpace(words[0])
-			if pathPrefix == "" {
-				return nil, fmt.Errorf("pathPrefix must not be empty: %s", trimmedLine)
-			}
-			if len(pathPrefix) >= 2 && pathPrefix[0] == '"' && pathPrefix[len(pathPrefix)-1] == '"' {
-				pathPrefix = pathPrefix[1 : len(pathPrefix)-1]
-			}
-			valueStr := strings.TrimSpace(words[1])
-			var value *string
-			if valueStr == "" || valueStr == "null" {
-				value = nil
-			} else {
-				if len(valueStr) >= 2 && valueStr[0] == '"' && valueStr[len(valueStr)-1] == '"' {
-					valueStr = valueStr[1 : len(valueStr)-1]
-				}
-				value = &valueStr
-			}
-			config[currentVarName] = append(config[currentVarName], PathValue{PathPrefix: pathPrefix, Value: value})
+			currentPathIndent = -1
+			currentPathValue = nil
+			continue
 		}
+		// indent > 0
+		if currentVarName == "" {
+			return nil, fmt.Errorf("path-and-value line must be under a variable name: %s", trimmedLine)
+		}
+		if currentPathValue != nil && indent > currentPathIndent {
+			// exec の行が期待される
+			parts := strings.SplitN(trimmedLine, ":", 2)
+			if len(parts) != 2 {
+				return nil, fmt.Errorf("nested key must be in 'key: value' format: %s", trimmedLine)
+			}
+			key := strings.TrimSpace(parts[0])
+			val := strings.TrimSpace(parts[1])
+			val = trimQuotes(val)
+			switch key {
+			case "exec":
+				if val == "" {
+					return nil, fmt.Errorf("exec value must not be empty: %s", trimmedLine)
+				}
+				currentPathValue.Value = nil
+				currentPathValue.Exec = &val
+			default:
+				return nil, fmt.Errorf("unknown nested key: %s", key)
+			}
+			continue
+		}
+		// パスの行が期待される
+		parts := strings.SplitN(trimmedLine, ":", 2)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("path and value must be separated by a colon: %s", trimmedLine)
+		}
+		pathPrefix := strings.TrimSpace(parts[0])
+		if pathPrefix == "" {
+			return nil, fmt.Errorf("pathPrefix must not be empty: %s", trimmedLine)
+		}
+		pathPrefix = trimQuotes(pathPrefix)
+		valueStr := strings.TrimSpace(parts[1])
+		var value *string
+		if valueStr == "" || valueStr == "null" {
+			value = nil
+		} else {
+			valueStr = trimQuotes(valueStr)
+			value = &valueStr
+		}
+		pathValue := PathValue{PathPrefix: pathPrefix, Value: value}
+		config[currentVarName] = append(config[currentVarName], pathValue)
+		currentPathIndent = indent
+		currentPathValue = &config[currentVarName][len(config[currentVarName])-1]
 	}
 	return &config, nil
+}
+
+func countIndent(s string) int {
+	n := 0
+	for _, r := range s {
+		if r == ' ' || r == '\t' {
+			n++
+			continue
+		}
+		break
+	}
+	return n
+}
+
+func trimQuotes(s string) string {
+	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
+		return s[1 : len(s)-1]
+	}
+	return s
 }
 
 func makeCachedScriptPath(shellPid uint) string {
@@ -250,6 +299,16 @@ func openFileAndCreateIfNecessaryRecursive(path string, flag int, mode os.FileMo
 		}
 	}
 	return file, nil
+}
+
+// runExecCommand executes a shell command and returns its stdout trimmed of trailing newlines.
+func runExecCommand(cmd string) (string, error) {
+	c := exec.Command("sh", "-c", cmd)
+	out, err := c.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimRight(string(out), "\r\n"), nil
 }
 
 //go:embed hook.bash
