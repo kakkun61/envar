@@ -1,5 +1,5 @@
 {
-  description = "gh-auth-switch";
+  description = "envar";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
