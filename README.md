@@ -26,11 +26,9 @@ envar hook logout $$
 
 ## Write the configuration file
 
-The configuration file uses a subset of the YAML format. It is located at _`$CONFIG_DIR`/envar/config.yaml_. `$CONFIG_DIR` is a returned value of [`os.UserConfigDir()`](https://pkg.go.dev/os#UserConfigDir).
+The configuration file uses YAML. It is located at _`$CONFIG_DIR`/envar/config.yaml_. `$CONFIG_DIR` is the value returned by [`os.UserConfigDir()`](https://pkg.go.dev/os#UserConfigDir).
 
-The file format consists of two levels. The first level is an environment variable name and colon. The second level is a list of lines containing two fields: a path prefix and a GitHub username separated by a colon. Comment lines start with `#` and empty lines are ignored. Path prefixes can be quoted with double quotes. `~` expands to the user's home directory. Lines are matched from top to bottom, with the first match taking precedence.
-
-For instance:
+For example:
 
 ```yaml
 FOO_VAR:
@@ -57,7 +55,7 @@ FOO_VAR:
 
 When no matching path prefix is found for a variable, it is unset.
 
-You can use programs to get values, if you don't want to write some secret values directly in the configuration file for example. Here is an instance using `gh` CLI to get GitHub authentication token:
+You can compute values using a command, which is useful when you don't want to store secrets directly in the configuration file. For example, using the `gh` CLI to get a GitHub authentication token:
 
 ```yaml
 GH_TOKEN:

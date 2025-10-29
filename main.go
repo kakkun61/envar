@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"go.yaml.in/yaml/v4"
 )
 
 const appName = "envar"
@@ -134,105 +136,100 @@ func UnmarshalConfig(bytes []byte) (*Config, error) {
 	if !utf8.Valid(bytes) {
 		return nil, fmt.Errorf("config is invalid UTF-8")
 	}
-	str := string(bytes)
-	config := make(Config)
-	lines := strings.Split(str, "\n")
-	var currentVarName string
-	var currentPathIndent int = -1
-	var currentPathValue *PathValue
-	for i := range lines {
-		line := lines[i]
-		trimmedLine := strings.TrimSpace(line)
-		if trimmedLine == "" || strings.HasPrefix(trimmedLine, "#") {
+	cfg := make(Config)
+	// 空入力は空設定として扱う
+	if strings.TrimSpace(string(bytes)) == "" {
+		return &cfg, nil
+	}
+	var root yaml.Node
+	if err := yaml.Unmarshal(bytes, &root); err != nil {
+		return nil, fmt.Errorf("failed to parse yaml: %w", err)
+	}
+	// DocumentNode の直下を取得
+	if len(root.Content) == 0 {
+		return &cfg, nil
+	}
+	top := root.Content[0]
+	if top.Kind != yaml.MappingNode {
+		return nil, fmt.Errorf("top-level yaml must be a mapping")
+	}
+	// トップレベル: 変数名 → マップ（パス → 値）
+	for i := 0; i < len(top.Content); i += 2 {
+		k := top.Content[i]
+		v := top.Content[i+1]
+		if k.Kind != yaml.ScalarNode {
+			return nil, fmt.Errorf("variable name must be a scalar, got kind=%v", k.Kind)
+		}
+		varName := strings.TrimSpace(k.Value)
+		if varName == "" {
+			return nil, fmt.Errorf("variable name must not be empty")
+		}
+		if _, ok := cfg[varName]; !ok {
+			cfg[varName] = make([]PathValue, 0)
+		}
+		// 値が null の場合はスキップ（エントリなし）
+		if v.Kind == yaml.ScalarNode && v.Tag == "!!null" {
 			continue
 		}
-		indent := countIndent(line)
-		if indent == 0 {
-			// 変数名の行が期待される
-			if !strings.HasSuffix(trimmedLine, ":") {
-				return nil, fmt.Errorf("variable name line must end with colon: %s", trimmedLine)
-			}
-			name := strings.TrimSpace(trimmedLine[:len(trimmedLine)-1])
-			if name == "" {
-				return nil, fmt.Errorf("variable name must not be empty: %s", trimmedLine)
-			}
-			name = trimQuotes(name)
-			currentVarName = name
-			if _, exists := config[currentVarName]; !exists {
-				config[currentVarName] = make([]PathValue, 0)
-			}
-			currentPathIndent = -1
-			currentPathValue = nil
-			continue
+		if v.Kind != yaml.MappingNode {
+			return nil, fmt.Errorf("variable '%s' must be a mapping", varName)
 		}
-		// indent > 0
-		if currentVarName == "" {
-			return nil, fmt.Errorf("path-and-value line must be under a variable name: %s", trimmedLine)
-		}
-		if currentPathValue != nil && indent > currentPathIndent {
-			// exec の行が期待される
-			parts := strings.SplitN(trimmedLine, ":", 2)
-			if len(parts) != 2 {
-				return nil, fmt.Errorf("nested key must be in 'key: value' format: %s", trimmedLine)
+		// パス → 値
+		for j := 0; j+1 < len(v.Content); j += 2 {
+			pk := v.Content[j]
+			pv := v.Content[j+1]
+			if pk.Kind != yaml.ScalarNode {
+				return nil, fmt.Errorf("path prefix must be a scalar under '%s'", varName)
 			}
-			key := strings.TrimSpace(parts[0])
-			val := strings.TrimSpace(parts[1])
-			val = trimQuotes(val)
-			switch key {
-			case "exec":
-				if val == "" {
-					return nil, fmt.Errorf("exec value must not be empty: %s", trimmedLine)
+			pathPrefix := strings.TrimSpace(pk.Value)
+			if pathPrefix == "" {
+				return nil, fmt.Errorf("pathPrefix must not be empty under '%s'", varName)
+			}
+			var pathValue PathValue
+			pathValue.PathPrefix = pathPrefix
+			switch pv.Kind {
+			case yaml.ScalarNode:
+				// null or scalar string
+				if pv.Tag == "!!null" || strings.TrimSpace(pv.Value) == "" {
+					pathValue.Value = nil
+				} else {
+					val := pv.Value
+					pathValue.Value = &val
 				}
-				currentPathValue.Value = nil
-				currentPathValue.Exec = &val
+			case yaml.MappingNode:
+				// ネストキー（現状 exec のみ対応）
+				var seenExec bool
+				for m := 0; m+1 < len(pv.Content); m += 2 {
+					nk := pv.Content[m]
+					nv := pv.Content[m+1]
+					if nk.Kind != yaml.ScalarNode {
+						return nil, fmt.Errorf("nested key must be a scalar under path '%s'", pathPrefix)
+					}
+					key := nk.Value
+					switch key {
+					case "exec":
+						if nv.Kind != yaml.ScalarNode || nv.Tag == "!!null" || strings.TrimSpace(nv.Value) == "" {
+							return nil, fmt.Errorf("exec value must not be empty under path '%s'", pathPrefix)
+						}
+						val := nv.Value
+						pathValue.Value = nil
+						pathValue.Exec = &val
+						seenExec = true
+					default:
+						return nil, fmt.Errorf("unknown nested key: %s", key)
+					}
+				}
+				if !seenExec {
+					return nil, fmt.Errorf("nested mapping under path '%s' must contain 'exec'", pathPrefix)
+				}
 			default:
-				return nil, fmt.Errorf("unknown nested key: %s", key)
+				return nil, fmt.Errorf("unsupported value node kind under path '%s': %v", pathPrefix, pv.Kind)
 			}
-			continue
+			cfg[varName] = append(cfg[varName], pathValue)
 		}
-		// パスの行が期待される
-		parts := strings.SplitN(trimmedLine, ":", 2)
-		if len(parts) != 2 {
-			return nil, fmt.Errorf("path and value must be separated by a colon: %s", trimmedLine)
-		}
-		pathPrefix := strings.TrimSpace(parts[0])
-		if pathPrefix == "" {
-			return nil, fmt.Errorf("pathPrefix must not be empty: %s", trimmedLine)
-		}
-		pathPrefix = trimQuotes(pathPrefix)
-		valueStr := strings.TrimSpace(parts[1])
-		var value *string
-		if valueStr == "" || valueStr == "null" {
-			value = nil
-		} else {
-			valueStr = trimQuotes(valueStr)
-			value = &valueStr
-		}
-		pathValue := PathValue{PathPrefix: pathPrefix, Value: value}
-		config[currentVarName] = append(config[currentVarName], pathValue)
-		currentPathIndent = indent
-		currentPathValue = &config[currentVarName][len(config[currentVarName])-1]
 	}
-	return &config, nil
-}
 
-func countIndent(s string) int {
-	n := 0
-	for _, r := range s {
-		if r == ' ' || r == '\t' {
-			n++
-			continue
-		}
-		break
-	}
-	return n
-}
-
-func trimQuotes(s string) string {
-	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
-		return s[1 : len(s)-1]
-	}
-	return s
+	return &cfg, nil
 }
 
 func makeCachedScriptPath(shellPid uint) string {
