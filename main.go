@@ -23,6 +23,21 @@ func main() {
 		log.Fatalf("arguments must be one or more: %d", len(os.Args)-1)
 	}
 	switch os.Args[1] {
+	case "help":
+		fmt.Print(usageMessage)
+	case "path":
+		if len(os.Args) != 3 {
+			log.Fatalf("invalid number of arguments for path: %d", len(os.Args)-1)
+		}
+		if os.Args[2] != "config" {
+			log.Fatalf("unknown path type: %s", os.Args[2])
+		}
+		configDir, err := os.UserConfigDir()
+		if err != nil {
+			log.Fatalf("failed to get user config dir, because %v", err)
+		}
+		path := filepath.Join(configDir, appName)
+		fmt.Println(path)
 	case "hook":
 		switch len(os.Args) {
 		case 2:
@@ -388,6 +403,23 @@ func runExecCommand(commandTemplate string, args []string) (string, error) {
 	}
 	return strings.TrimRight(string(out), "\r\n"), nil
 }
+
+const usageMessage = "envar\n" +
+	"\n" +
+	"This is a command-line tool that automatically switches values of environment variables based on the current directory path.\n" +
+	"\n" +
+	"envar <shell-pid>\n" +
+	"  Outputs shell script to set/unset environment variables. Call `eval $(envar $$)`.\n" +
+	"envar hook\n" +
+	"  Outputs shell hook script. Call `eval $(envar hook)`.\n" +
+	"envar hook logout <shell-pid>\n" +
+	"  Cleans up cached data.\n" +
+	"envar path config\n" +
+	"  Displays the path to the configuration directory.\n" +
+	"envar help\n" +
+	"  Displays this help message.\n" +
+	"\n" +
+	"https://github.com/kakkun61/envar\n"
 
 //go:embed hook.bash
 var hookScript string
