@@ -26,9 +26,9 @@ envar hook logout $$
 
 ## Write the configuration file
 
-The configuration file uses YAML. It is located at _`$CONFIG_DIR`/envar/config.yaml_. `$CONFIG_DIR` is the value returned by [`os.UserConfigDir()`](https://pkg.go.dev/os#UserConfigDir).
+The configuration file uses YAML. It is located at _`$CONFIG_DIR`/envar/vars.yaml_ and _`$CONFIG_DIR`/envar/execs.yaml_. `$CONFIG_DIR` is the value returned by [`os.UserConfigDir()`](https://pkg.go.dev/os#UserConfigDir).
 
-For example:
+_vars.yaml_ is used to define environment variable values. For example:
 
 ```yaml
 FOO_VAR:
@@ -55,12 +55,36 @@ FOO_VAR:
 
 When no matching path prefix is found for a variable, it is unset.
 
-You can compute values using a command, which is useful when you don't want to store secrets directly in the configuration file. For example, using the `gh` CLI to get a GitHub authentication token:
+You can compute values using a command, which is useful when you don't want to store secrets directly in the configuration file. For example, using the `gh` CLI to get a GitHub authentication token, you must prepare _execs.yaml_ first like this:
+
+```yaml
+gh: gh auth token --user %s
+```
+
+The key `gh` is a config variable that is referenced in _vars.yaml_ later, and the value is a command template. The placeholder `%s` is replaced by the argument specified in _vars.yaml_.
+
+Then, you can use it in _vars.yaml_ like this:
 
 ```yaml
 GH_TOKEN:
   path/to/dir:
-    exec: gh auth token --user foo
+    gh: foo
   other/path:
-    exec: gh auth token --user bar
+    gh: bar
 ```
+
+Placeholders can be placed multiple times in a command template, for example when _execs.yaml_ is like this:
+
+```yaml
+echo: bash -c 'echo %s and %s'
+```
+
+You can use it in _vars.yaml_ like this:
+
+```yaml
+ECHO_VAR:
+  some/dir:
+    echo: [ John, Alice ]
+```
+
+Note that no escaping is performed for the arguments.

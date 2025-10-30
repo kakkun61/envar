@@ -56,9 +56,9 @@ func main() {
 }
 
 func doMain(shellPid uint) {
-	config, err := readConfig()
+	varsConfig, execsConfig, err := readConfigs()
 	if err != nil {
-		log.Fatal(fmt.Errorf("failed to read config, because %w", err))
+		log.Fatal(fmt.Errorf("failed to read configs, because %w", err))
 	}
 	workingDirectory, err := os.Getwd()
 	if err != nil {
@@ -69,22 +69,26 @@ func doMain(shellPid uint) {
 		log.Fatal(fmt.Errorf("failed to get user home directory, because %w", err))
 	}
 	script := make([]string, 0)
-	for varName, pathValues := range *config {
-		for _, pathValue := range pathValues {
-			pathPrefix := pathValue.PathPrefix
-			pathPrefix = strings.Replace(pathPrefix, "~", homeDir, 1)
-			matched := strings.HasPrefix(workingDirectory, pathPrefix)
+	for varName, pathItems := range *varsConfig {
+		for _, pathItem := range pathItems {
+			path := pathItem.Path
+			path = strings.Replace(path, "~", homeDir, 1)
+			matched := strings.HasPrefix(workingDirectory, path)
 			if matched {
-				if pathValue.Exec != nil {
-					v, err := runExecCommand(*pathValue.Exec)
+				if pathItem.Exec != nil {
+					commandTemplate, ok := (*execsConfig)[pathItem.Exec.Id]
+					if !ok {
+						log.Fatal(fmt.Errorf("exec reference '%s' not found in execs.yaml for variable %s", pathItem.Exec.Id, varName))
+					}
+					v, err := runExecCommand(commandTemplate, pathItem.Exec.Args)
 					if err != nil {
 						log.Fatal(fmt.Errorf("failed to run exec for %s, because %w", varName, err))
 					}
 					script = append(script, fmt.Sprintf("export %s=%s", varName, v))
-				} else if pathValue.Value == nil {
+				} else if pathItem.Value == nil {
 					script = append(script, fmt.Sprintf("unset %s", varName))
 				} else {
-					script = append(script, fmt.Sprintf("export %s=%s", varName, *pathValue.Value))
+					script = append(script, fmt.Sprintf("export %s=%s", varName, *pathItem.Value))
 				}
 				goto nextVar
 			}
@@ -102,41 +106,70 @@ func doMain(shellPid uint) {
 	writeCachedScript(shellPid, script)
 }
 
-type PathValue struct {
-	PathPrefix string
-	Value      *string // nil means unset
-	Exec       *string // optional command to execute for value
+type VarsConfig = map[VarName][]PathItem
+
+type ExecsConfig = map[ExecId]ExecPattern
+
+type VarName = string
+
+type ExecId = string
+
+type ExecPattern = string
+
+type PathItem struct {
+	Path  string
+	Value *string   // nil means unset
+	Exec  *ExecItem // optional reference to exec command
 }
 
-type Config = map[string][]PathValue
+type ExecItem struct {
+	Id   ExecId
+	Args []string
+}
 
-func readConfig() (*Config, error) {
+func readConfigs() (*VarsConfig, *ExecsConfig, error) {
+	varsBytes, err := readConfig("vars.yaml")
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to read vars config, because %w", err)
+	}
+	execsBytes, err := readConfig("execs.yaml")
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to read execs config, because %w", err)
+	}
+	config, err := UnmarshalVarsConfig(varsBytes)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to unmarshal vars config, because %w", err)
+	}
+	execsConfig, err := UnmarshalExecsConfig(execsBytes)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to unmarshal execs config, because %w", err)
+	}
+	return config, execsConfig, nil
+}
+
+func readConfig(fileName string) ([]byte, error) {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user config dir, because %w", err)
 	}
-	configPath := filepath.Join(configDir, appName, "config.yaml")
-	configFile, err := openFileAndCreateIfNecessaryRecursive(configPath, os.O_RDONLY, 0777)
+	path := filepath.Join(configDir, appName, fileName)
+	file, err := openFileAndCreateIfNecessaryRecursive(path, os.O_RDONLY, 0777)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open a config: %s, because %w", configPath, err)
+		return nil, fmt.Errorf("failed to open vars config: %s, because %w", path, err)
 	}
-	defer configFile.Close()
-	configBytes, err := io.ReadAll(configFile)
+	defer file.Close()
+	bytes, err := io.ReadAll(file)
 	if err != nil && err != io.EOF {
-		return nil, fmt.Errorf("failed to read a config: %s, because %w", configPath, err)
+		return nil, fmt.Errorf("failed to read vars config: %s, because %w", path, err)
 	}
-	config, err := UnmarshalConfig(configBytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal a config: %s, because %w", configPath, err)
-	}
-	return config, nil
+	return bytes, nil
 }
 
-func UnmarshalConfig(bytes []byte) (*Config, error) {
+func UnmarshalVarsConfig(bytes []byte) (*VarsConfig, error) {
 	if !utf8.Valid(bytes) {
 		return nil, fmt.Errorf("config is invalid UTF-8")
 	}
-	cfg := make(Config)
+	cfg := make(VarsConfig)
 	// 空入力は空設定として扱う
 	if strings.TrimSpace(string(bytes)) == "" {
 		return &cfg, nil
@@ -153,7 +186,7 @@ func UnmarshalConfig(bytes []byte) (*Config, error) {
 	if top.Kind != yaml.MappingNode {
 		return nil, fmt.Errorf("top-level yaml must be a mapping")
 	}
-	// トップレベル: 変数名 → マップ（パス → 値）
+	// トップレベル：変数名 → マップ
 	for i := 0; i < len(top.Content); i += 2 {
 		k := top.Content[i]
 		v := top.Content[i+1]
@@ -165,70 +198,114 @@ func UnmarshalConfig(bytes []byte) (*Config, error) {
 			return nil, fmt.Errorf("variable name must not be empty")
 		}
 		if _, ok := cfg[varName]; !ok {
-			cfg[varName] = make([]PathValue, 0)
+			cfg[varName] = make([]PathItem, 0)
 		}
-		// 値が null の場合はスキップ（エントリなし）
+		// 値が null の場合はスキップ（エントリーなし）
 		if v.Kind == yaml.ScalarNode && v.Tag == "!!null" {
 			continue
 		}
 		if v.Kind != yaml.MappingNode {
 			return nil, fmt.Errorf("variable '%s' must be a mapping", varName)
 		}
-		// パス → 値
+		// セカンドレベル：パス → 値
 		for j := 0; j+1 < len(v.Content); j += 2 {
 			pk := v.Content[j]
 			pv := v.Content[j+1]
 			if pk.Kind != yaml.ScalarNode {
 				return nil, fmt.Errorf("path prefix must be a scalar under '%s'", varName)
 			}
-			pathPrefix := strings.TrimSpace(pk.Value)
-			if pathPrefix == "" {
-				return nil, fmt.Errorf("pathPrefix must not be empty under '%s'", varName)
+			path := strings.TrimSpace(pk.Value)
+			if path == "" {
+				return nil, fmt.Errorf("path must not be empty under '%s'", varName)
 			}
-			var pathValue PathValue
-			pathValue.PathPrefix = pathPrefix
+			var pathItem PathItem
+			pathItem.Path = path
 			switch pv.Kind {
 			case yaml.ScalarNode:
-				// null or scalar string
+				// 値がリテラルで書かれているか null が期待される
 				if pv.Tag == "!!null" || strings.TrimSpace(pv.Value) == "" {
-					pathValue.Value = nil
+					pathItem.Value = nil
 				} else {
 					val := pv.Value
-					pathValue.Value = &val
+					pathItem.Value = &val
 				}
 			case yaml.MappingNode:
-				// ネストキー（現状 exec のみ対応）
-				var seenExec bool
-				for m := 0; m+1 < len(pv.Content); m += 2 {
-					nk := pv.Content[m]
-					nv := pv.Content[m+1]
-					if nk.Kind != yaml.ScalarNode {
-						return nil, fmt.Errorf("nested key must be a scalar under path '%s'", pathPrefix)
-					}
-					key := nk.Value
-					switch key {
-					case "exec":
-						if nv.Kind != yaml.ScalarNode || nv.Tag == "!!null" || strings.TrimSpace(nv.Value) == "" {
-							return nil, fmt.Errorf("exec value must not be empty under path '%s'", pathPrefix)
-						}
-						val := nv.Value
-						pathValue.Value = nil
-						pathValue.Exec = &val
-						seenExec = true
-					default:
-						return nil, fmt.Errorf("unknown nested key: %s", key)
-					}
+				// ExecId → 引数 が期待される
+				if len(pv.Content) != 2 {
+					return nil, fmt.Errorf("nested mapping under path '%s' must have exactly one key-value pair", path)
 				}
-				if !seenExec {
-					return nil, fmt.Errorf("nested mapping under path '%s' must contain 'exec'", pathPrefix)
+				nk := pv.Content[0]
+				nv := pv.Content[1]
+				if nk.Kind != yaml.ScalarNode {
+					return nil, fmt.Errorf("exec reference key must be a scalar under path '%s'", path)
+				}
+				execName := nk.Value
+				pathItem.Value = nil
+				pathItem.Exec = &ExecItem{Id: execName}
+				pathItem.Exec.Args = make([]string, 0, len(nv.Content))
+				// 引数の解析
+				switch nv.Kind {
+				case yaml.ScalarNode:
+					// 単一引数
+					pathItem.Exec.Args = append(pathItem.Exec.Args, nv.Value)
+				case yaml.SequenceNode:
+					// 配列引数
+					for _, argNode := range nv.Content {
+						if argNode.Kind != yaml.ScalarNode {
+							return nil, fmt.Errorf("exec arguments must be scalars under path '%s'", path)
+						}
+						pathItem.Exec.Args = append(pathItem.Exec.Args, argNode.Value)
+					}
+				default:
+					return nil, fmt.Errorf("exec argument must be a scalar or array under path '%s'", path)
 				}
 			default:
-				return nil, fmt.Errorf("unsupported value node kind under path '%s': %v", pathPrefix, pv.Kind)
+				return nil, fmt.Errorf("unsupported value node kind under path '%s': %v", path, pv.Kind)
 			}
-			cfg[varName] = append(cfg[varName], pathValue)
+			cfg[varName] = append(cfg[varName], pathItem)
 		}
 	}
 
+	return &cfg, nil
+}
+
+func UnmarshalExecsConfig(bytes []byte) (*ExecsConfig, error) {
+	if !utf8.Valid(bytes) {
+		return nil, fmt.Errorf("execs config is invalid UTF-8")
+	}
+	cfg := make(ExecsConfig)
+	// 空入力は空設定として扱う
+	if strings.TrimSpace(string(bytes)) == "" {
+		return &cfg, nil
+	}
+	var root yaml.Node
+	if err := yaml.Unmarshal(bytes, &root); err != nil {
+		return nil, fmt.Errorf("failed to parse yaml: %w", err)
+	}
+	// DocumentNode の直下を取得
+	if len(root.Content) == 0 {
+		return &cfg, nil
+	}
+	top := root.Content[0]
+	if top.Kind != yaml.MappingNode {
+		return nil, fmt.Errorf("top-level yaml must be a mapping")
+	}
+	// トップレベル：名前 → コマンドテンプレート
+	for i := 0; i < len(top.Content); i += 2 {
+		k := top.Content[i]
+		v := top.Content[i+1]
+		if k.Kind != yaml.ScalarNode {
+			return nil, fmt.Errorf("exec name must be a scalar, got kind: %v", k.Kind)
+		}
+		if v.Kind != yaml.ScalarNode {
+			return nil, fmt.Errorf("exec command must be a scalar, got kind: %v", v.Kind)
+		}
+		execName := strings.TrimSpace(k.Value)
+		if execName == "" {
+			return nil, fmt.Errorf("exec name must not be empty")
+		}
+		cfg[execName] = v.Value
+	}
 	return &cfg, nil
 }
 
@@ -298,9 +375,13 @@ func openFileAndCreateIfNecessaryRecursive(path string, flag int, mode os.FileMo
 	return file, nil
 }
 
-// runExecCommand executes a shell command and returns its stdout trimmed of trailing newlines.
-func runExecCommand(cmd string) (string, error) {
-	c := exec.Command("sh", "-c", cmd)
+func runExecCommand(commandTemplate string, args []string) (string, error) {
+	var command string
+	command = commandTemplate
+	for _, arg := range args {
+		command = strings.Replace(command, "%s", arg, 1)
+	}
+	c := exec.Command("sh", "-c", command)
 	out, err := c.Output()
 	if err != nil {
 		return "", err
