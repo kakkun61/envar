@@ -30,6 +30,12 @@
               yamlfmt
             ];
           };
+          packages.default = pkgs.buildGoModule {
+            pname = "envar";
+            version = "1";
+            src = ./.;
+            vendorHash = "sha256-eoJHYEEZYbD/IYar7JhbyuWWjSo7fkJoNNnVDwOVeV4=";
+          };
         };
       flake = { };
     };
