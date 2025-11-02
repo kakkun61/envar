@@ -88,3 +88,31 @@ ECHO_VAR:
 ```
 
 Note that no escaping is performed for the arguments.
+
+## Using with Nix's Home Manager
+
+A Nix module for Home Manager is provided. You can write a Home Manager configuration like this:
+
+```nix
+modules = [
+  envar.homeModules.default
+  {
+    programs.envar = {
+      enable = true;
+      enableBashIntegration = true;
+      settings = {
+        vars = {
+          FOO_VAR = {
+            "path/to/dir" = "foo-value-1";
+          };
+        };
+        execs = {
+          gh = "gh auth token --user %s";
+        };
+      };
+    };
+  };
+];
+```
+
+You will find a full example at `homeConfigurations.test` in the _flake.nix_ file.

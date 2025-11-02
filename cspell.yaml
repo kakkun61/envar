@@ -6,8 +6,10 @@ words:
   - nixfmt
   - nixos
   - nixpkgs
+  - numtide
   - pkgs
   - pname
+  - stdenv
   - treefmt
 ignorePaths:
   - .*
