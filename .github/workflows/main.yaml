@@ -19,6 +19,14 @@ jobs:
         with:
           name: envar-${{ matrix.goarch }}-${{ matrix.goos }}
           path: ./envar-*
+  build-nix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: cachix/install-nix-action@v31
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - run: nix build .
   test:
     runs-on: ubuntu-latest
     steps:
@@ -27,6 +35,17 @@ jobs:
         with:
           nix_path: nixpkgs=channel:nixos-unstable
       - run: nix develop --command go test
+  test-home-module:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: cachix/install-nix-action@v31
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - run: nix-channel --add https://github.com/nix-community/home-manager/archive/master.tar.gz home-manager
+      - run: nix-channel --update
+      - run: nix-shell '<home-manager>' -A install
+      - run: home-manager build --flake .#test
   format:
     runs-on: ubuntu-latest
     steps:
