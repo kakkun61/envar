@@ -78,7 +78,7 @@
               "envar/vars.yaml".source = yamlFormat.generate "envar-vars.yaml" config'.settings.vars;
               "envar/execs.yaml".source = yamlFormat.generate "envar-execs.yaml" config'.settings.execs;
             };
-            programs.bash = lib.mkIf config'.bashIntegration {
+            programs.bash = lib.mkIf config'.enableBashIntegration {
               initExtra = ''
                 eval "$(${config'.package}/bin/envar hook)"
               '';
