@@ -24,7 +24,7 @@ in
       default = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
       description = "The envar package to use.";
     };
-    enableBashIntegration = lib.mkEnableOption "Enable bash integration";
+    enableBashIntegration = lib.hm.shell.mkBashIntegrationOption { inherit config; };
     settings = {
       vars = lib.mkOption {
         type =
