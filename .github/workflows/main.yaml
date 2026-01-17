@@ -47,7 +47,7 @@ jobs:
       - run: nix-channel --add https://github.com/nix-community/home-manager/archive/master.tar.gz home-manager
       - run: nix-channel --update
       - run: nix-shell '<home-manager>' -A install
-      - run: home-manager build --flake .#test
+      - run: home-manager build --flake .#test-x86_64-linux
   check:
     runs-on: ubuntu-latest
     steps:

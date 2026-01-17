@@ -1,10 +1,10 @@
 # ./home-configuration-test.nix returns a Home Manager configuration
-{ inputs, homeModule }:
+{ inputs, system, homeModule }:
 let
   inherit (inputs) nixpkgs home-manager;
 in
 home-manager.lib.homeManagerConfiguration {
-  pkgs = import nixpkgs { system = "x86_64-linux"; };
+  pkgs = import nixpkgs { inherit system; };
   modules = [
     homeModule
     {

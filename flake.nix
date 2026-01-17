@@ -72,7 +72,10 @@
         };
       flake = {
         homeModules.default = homeModule;
-        homeConfigurations.test = import ./home-configuration-test.nix { inherit inputs homeModule; };
+        homeConfigurations = {
+          test-x86_64-linux = import ./home-configuration-test.nix { inherit inputs homeModule; system = "x86_64-linux"; };
+          test-aarch64-darwin = import ./home-configuration-test.nix { inherit inputs homeModule; system = "aarch64-darwin"; };
+        };
         modules.homeManager.default = homeModule;
       };
     };
