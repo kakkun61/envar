@@ -1,16 +1,23 @@
 words:
   - adrg
+  - cachix
+  - coreutils
   - envar
+  - errexit
   - gofeed
+  - kakkun
   - mmcdole
   - nixfmt
   - nixos
   - nixpkgs
+  - nounset
   - numtide
+  - pipefail
   - pkgs
   - pname
   - stdenv
   - treefmt
+  - xlink
 ignorePaths:
   - .*
   - flake.lock
