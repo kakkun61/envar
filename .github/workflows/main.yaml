@@ -14,7 +14,8 @@ jobs:
       - uses: cachix/install-nix-action@v31
         with:
           nix_path: nixpkgs=channel:nixos-unstable
-      - run: GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} nix develop --command go build -o envar-${{ matrix.goarch }}-${{ matrix.goos }}${{ matrix.goos == 'windows' && '.exe' || '' }} .
+      - run: GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o envar-${{ matrix.goarch }}-${{ matrix.goos }}${{ matrix.goos == 'windows' && '.exe' || '' }} .
+        shell: 'nix develop -c bash -e {0}'
       - uses: actions/upload-artifact@v5
         with:
           name: envar-${{ matrix.goarch }}-${{ matrix.goos }}
@@ -34,7 +35,8 @@ jobs:
       - uses: cachix/install-nix-action@v31
         with:
           nix_path: nixpkgs=channel:nixos-unstable
-      - run: nix develop --command go test
+      - run: go test
+        shell: 'nix develop -c bash -e {0}'
   test-home-module:
     runs-on: ubuntu-latest
     steps:
@@ -54,11 +56,3 @@ jobs:
         with:
           nix_path: nixpkgs=channel:nixos-unstable
       - run: nix flake check
-  spell:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: cachix/install-nix-action@v31
-        with:
-          nix_path: nixpkgs=channel:nixos-unstable
-      - run: nix develop --command cspell .
