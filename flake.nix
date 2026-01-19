@@ -21,73 +21,9 @@
       ...
     }:
     let
-      homeModule =
-        {
-          pkgs,
-          lib,
-          config,
-          ...
-        }:
-        let
-          config' = config.programs.envar;
-          yamlFormat = pkgs.formats.yaml { };
-        in
-        {
-          options.programs.envar = {
-            enable = lib.mkEnableOption "Enable envar";
-            package = lib.mkOption {
-              type = with lib.types; package;
-              default = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
-              description = "The envar package to use.";
-            };
-            enableBashIntegration = lib.mkEnableOption "Enable bash integration";
-            settings = {
-              vars = lib.mkOption {
-                type =
-                  with lib.types;
-                  # var
-                  attrsOf (
-                    # path
-                    attrsOf (
-                      either
-                        (
-                          # value
-                          str
-                        )
-                        (
-                          # command
-                          attrsOf (
-                            either str (listOf str) # args
-                          )
-                        )
-                    )
-                  );
-                default = { };
-                description = "Environment variables to set.";
-              };
-              execs = lib.mkOption {
-                type = with lib.types; attrsOf str;
-                default = { };
-                description = "Scripts to execute";
-              };
-            };
-          };
-          config = lib.mkIf config'.enable {
-            home.packages = [ config'.package ];
-            xdg.configFile = {
-              "envar/vars.yaml".source = yamlFormat.generate "envar-vars.yaml" config'.settings.vars;
-              "envar/execs.yaml".source = yamlFormat.generate "envar-execs.yaml" config'.settings.execs;
-            };
-            programs.bash = lib.mkIf config'.enableBashIntegration {
-              initExtra = ''
-                eval "$(${config'.package}/bin/envar hook)"
-              '';
-              logoutExtra = ''
-                ${config'.package}/bin/envar hook logout $$
-              '';
-            };
-          };
-        };
+      homeModule = nixpkgs.lib.setDefaultModuleLocation ./home-module.nix (
+        import ./home-module.nix { inherit inputs; }
+      );
     in
     flake-parts.lib.mkFlake { inherit inputs; } {
       imports = [
@@ -126,33 +62,7 @@
         };
       flake = {
         homeModules.default = homeModule;
-        homeConfigurations.test = home-manager.lib.homeManagerConfiguration {
-          pkgs = import nixpkgs { system = "x86_64-linux"; };
-          modules = [
-            homeModule
-            {
-              home = {
-                stateVersion = "24.05";
-                username = "test";
-                homeDirectory = "/home/test";
-              };
-              programs.envar = {
-                enable = true;
-                enableBashIntegration = true;
-                settings = {
-                  vars = {
-                    FOO = {
-                      "/tmp/foo" = "foo";
-                    };
-                  };
-                  execs = {
-                    bar = "/bin/bar";
-                  };
-                };
-              };
-            }
-          ];
-        };
+        homeConfigurations.test = import ./home-configuration-test.nix { inherit inputs homeModule; };
       };
     };
 }
