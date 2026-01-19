@@ -62,7 +62,7 @@
             pname = "envar";
             version = "1";
             src = ./.;
-            vendorHash = "sha256-eoJHYEEZYbD/IYar7JhbyuWWjSo7fkJoNNnVDwOVeV4=";
+            vendorHash = "sha256-BRQQKJ164ndYWpTTp7JlY18ExpQtECDv3Z/tg3OcuHk=";
           };
           treefmt = {
             programs = {
