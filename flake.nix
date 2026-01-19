@@ -30,11 +30,12 @@
         treefmt-nix.flakeModule
         home-manager.flakeModules.home-manager
       ];
-      systems =
-        let
-          inherit (nixpkgs) lib;
-        in
-        builtins.filter (s: lib.hasSuffix "linux" s || lib.hasSuffix "darwin" s) lib.systems.flakeExposed;
+      systems = [
+        "aarch64-darwin"
+        "aarch64-linux"
+        "x86_64-darwin"
+        "x86_64-linux"
+      ];
       perSystem =
         {
           config,
