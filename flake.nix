@@ -9,6 +9,10 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     home-manager.url = "github:nix-community/home-manager";
+    cspell-nix = {
+      url = "github:kakkun61/cspell-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -18,6 +22,7 @@
       flake-parts,
       treefmt-nix,
       home-manager,
+      cspell-nix,
       ...
     }:
     let
@@ -30,6 +35,7 @@
         flake-parts.flakeModules.modules
         treefmt-nix.flakeModule
         home-manager.flakeModules.home-manager
+        cspell-nix.flakeModule
       ];
       systems = [
         "aarch64-darwin"
@@ -49,7 +55,6 @@
         {
           devShells.default = pkgs.mkShell {
             packages = with pkgs; [
-              cspell
               go
             ];
           };
@@ -65,6 +70,7 @@
               yamlfmt.enable = true;
             };
           };
+          cspell.configFile = ./cspell.yaml;
         };
       flake = {
         homeModules.default = homeModule;
