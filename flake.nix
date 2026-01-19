@@ -27,6 +27,7 @@
     in
     flake-parts.lib.mkFlake { inherit inputs; } {
       imports = [
+        flake-parts.flakeModules.modules
         treefmt-nix.flakeModule
         home-manager.flakeModules.home-manager
       ];
@@ -68,6 +69,7 @@
       flake = {
         homeModules.default = homeModule;
         homeConfigurations.test = import ./home-configuration-test.nix { inherit inputs homeModule; };
+        modules.homeManager.default = homeModule;
       };
     };
 }
