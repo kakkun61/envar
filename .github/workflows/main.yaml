@@ -16,7 +16,7 @@ jobs:
           nix_path: nixpkgs=channel:nixos-unstable
       - run: GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o envar-${{ matrix.goarch }}-${{ matrix.goos }}${{ matrix.goos == 'windows' && '.exe' || '' }} .
         shell: 'nix develop -c bash -e {0}'
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with:
           name: envar-${{ matrix.goarch }}-${{ matrix.goos }}
           path: ./envar-*
