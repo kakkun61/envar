@@ -54,9 +54,7 @@
         }:
         {
           devShells.default = pkgs.mkShell {
-            packages = with pkgs; [
-              go
-            ];
+            packages = with pkgs; [ go ];
           };
           packages.default = pkgs.buildGoModule {
             pname = "envar";

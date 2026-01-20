@@ -18,9 +18,18 @@ home-manager.lib.homeManagerConfiguration {
         enableBashIntegration = true;
         settings = {
           vars = {
-            FOO = {
-              "/tmp/foo" = "foo";
-            };
+            FOO = [
+              {
+                path = "/tmp/foo";
+                value = "foo";
+              }
+              {
+                path = "/tmp/bar";
+                value = {
+                  gh = "kakkun61";
+                };
+              }
+            ];
           };
           execs = {
             bar = "/bin/bar";

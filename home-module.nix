@@ -12,6 +12,7 @@ in
 let
   config' = config.programs.envar;
   yamlFormat = pkgs.formats.yaml { };
+  inherit (import ./internal.nix { inherit lib; }) makeVarsYamlString;
 in
 {
   _class = "homeManager";
@@ -30,20 +31,30 @@ in
           with lib.types;
           # var
           attrsOf (
-            # path
-            attrsOf (
-              either
-                (
-                  # value
-                  str
-                )
-                (
-                  # command
-                  attrsOf (
-                    either str (listOf str) # args
-                  )
-                )
-            )
+            listOf (submodule {
+              options = {
+                path = lib.mkOption {
+                  type = str;
+                  description = "Path pattern to match.";
+                };
+                value = lib.mkOption {
+                  type =
+                    either
+                      (
+                        # value
+                        str
+                      )
+                      (
+                        # command
+                        attrsOf (
+                          # args
+                          either str (listOf str)
+                        )
+                      );
+                  description = "Value or command to bind the variable to.";
+                };
+              };
+            })
           );
         default = { };
         description = "Environment variables to set.";
@@ -58,7 +69,7 @@ in
   config = lib.mkIf config'.enable {
     home.packages = [ config'.package ];
     xdg.configFile = {
-      "envar/vars.yaml".source = yamlFormat.generate "envar-vars.yaml" config'.settings.vars;
+      "envar/vars.yaml".text = makeVarsYamlString config'.settings.vars;
       "envar/execs.yaml".source = yamlFormat.generate "envar-execs.yaml" config'.settings.execs;
     };
     programs.bash = lib.mkIf config'.enableBashIntegration {
