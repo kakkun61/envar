@@ -1,5 +1,9 @@
 # ./home-configuration-test.nix returns a Home Manager configuration
-{ inputs, system, homeModule }:
+{
+  inputs,
+  system,
+  homeModule,
+}:
 let
   inherit (inputs) nixpkgs home-manager;
 in
