@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+set -o errexit -o nounset -o pipefail
+
+cat <<EOF
+# cspell-nix flake module options
+
+This file is auto-generated and do not edit directly.
+
+EOF
+
+cat $(nix build .#optionsDoc --print-out-paths)

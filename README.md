@@ -102,9 +102,9 @@ modules = [
       enableBashIntegration = true;
       settings = {
         vars = {
-          FOO_VAR = {
-            "path/to/dir" = "foo-value-1";
-          };
+          FOO_VAR = [
+            { path = "path/to/dir"; value = "foo-value-1"; }
+          ];
         };
         execs = {
           gh = "gh auth token --user %s";
@@ -116,3 +116,7 @@ modules = [
 ```
 
 You will find a full example at `homeConfigurations.test` in the _flake.nix_ file.
+
+## Flake module options
+
+See [doc/options.md](doc/options.md) for the list of available options.

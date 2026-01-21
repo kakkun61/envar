@@ -26,9 +26,7 @@
       ...
     }:
     let
-      homeModule = nixpkgs.lib.setDefaultModuleLocation ./home-module.nix (
-        import ./home-module.nix { inherit inputs; }
-      );
+      homeModule = import ./home-module.nix { inherit inputs; };
     in
     flake-parts.lib.mkFlake { inherit inputs; } {
       imports = [
@@ -56,11 +54,14 @@
           devShells.default = pkgs.mkShell {
             packages = with pkgs; [ go ];
           };
-          packages.default = pkgs.buildGoModule {
-            pname = "envar";
-            version = "1";
-            src = ./.;
-            vendorHash = "sha256-BRQQKJ164ndYWpTTp7JlY18ExpQtECDv3Z/tg3OcuHk=";
+          packages = {
+            default = pkgs.buildGoModule {
+              pname = "envar";
+              version = "1";
+              src = ./.;
+              vendorHash = "sha256-BRQQKJ164ndYWpTTp7JlY18ExpQtECDv3Z/tg3OcuHk=";
+            };
+            optionsDoc = pkgs.callPackage ./options-doc.nix { inherit inputs homeModule; };
           };
           treefmt = {
             programs = {
@@ -71,7 +72,7 @@
           cspell.configFile = ./cspell.yaml;
         };
       flake = {
-        homeModules.default = homeModule;
+        homeModules.default = nixpkgs.lib.setDefaultModuleLocation ./home-module.nix homeModule;
         homeConfigurations = {
           test-x86_64-linux = import ./home-configuration-test.nix {
             inherit inputs homeModule;
