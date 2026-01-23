@@ -1,5 +1,11 @@
 # Change log of envar
 
+## 2.0.2
+
+*2026-01-23*
+
+Mistake Flakehub operations.
+
 ## 2.0.1
 
 *2026-01-23*

@@ -4,6 +4,7 @@ words:
   - coreutils
   - envar
   - errexit
+  - flakehub
   - gofeed
   - kakkun
   - mmcdole
