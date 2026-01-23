@@ -1,5 +1,13 @@
 # Change log of envar
 
+## 2.0.1
+
+*2026-01-23*
+
+Changes:
+
+- The license is changed from GPL-3.0-Only to Apache-2.0 for Nix source codes.
+
 ## 2.0.0
 
 *2026-01-21*

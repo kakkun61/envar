@@ -120,3 +120,7 @@ You will find a full example at `homeConfigurations.test` in the _flake.nix_ fil
 ## Flake module options
 
 See [doc/options.md](doc/options.md) for the list of available options.
+
+## License
+
+Nix source codes are licensed under the Apache-2.0 and Go source codes and others are licensed under the GPL-3.0-Only.
