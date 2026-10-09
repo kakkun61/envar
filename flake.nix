@@ -59,7 +59,7 @@
               pname = "envar";
               version = "1";
               src = ./.;
-              vendorHash = "sha256-BRQQKJ164ndYWpTTp7JlY18ExpQtECDv3Z/tg3OcuHk=";
+              vendorHash = "sha256-fzBX8bE8EILsuGmKl5VwTFqrjsJ5twy2eTwT3ik9Xl0=";
             };
             optionsDoc = pkgs.callPackage ./options-doc.nix { inherit inputs homeModule; };
           };
